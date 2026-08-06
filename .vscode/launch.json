@@ -1,0 +1,71 @@
+{
+  "version": "0.2.0",
+  "name": "PKVault",
+  "configurations": [
+    {
+      "name": ".NET Backend",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}/PKVault.Backend/PKVault.Backend.csproj"
+      ],
+      "cwd": "${workspaceFolder}/PKVault.Backend",
+      "console": "integratedTerminal",
+      "stopAtEntry": false
+    },
+    {
+      "name": "Attach to .NET Backend",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "?"
+    },
+    {
+      "name": "Frontend: Vite Dev",
+      "type": "pwa-node",
+      "request": "launch",
+      "runtimeExecutable": "node",
+      "program": "${workspaceFolder}/frontend/node_modules/vite/bin/vite.js",
+      "args": [
+        "dev",
+        "--host",
+        "--port",
+        "5173"
+      ],
+      "cwd": "${workspaceFolder}/frontend",
+      "console": "integratedTerminal",
+      "skipFiles": [
+        "<node_modules>/**"
+      ]
+    },
+    {
+      "name": "Frontend: Debug in Chrome",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend",
+      "breakOnLoad": true,
+      "sourceMapPathOverrides": {
+        "/*": "${webRoot}/*",
+        "webpack:///*": "${webRoot}/*",
+        "webpack:///src/*": "${webRoot}/src/*"
+      },
+      "skipFiles": [
+        "<node_modules>/**"
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "PKVault (Backend + Frontend)",
+      "configurations": [
+        ".NET Backend",
+        "Frontend: Vite Dev",
+        "Frontend: Debug in Chrome"
+      ],
+      "stopAll": true
+    }
+  ]
+}
