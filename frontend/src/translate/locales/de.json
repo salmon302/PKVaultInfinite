@@ -332,5 +332,12 @@
   "welcome.head.1": "PKVault hilft dir bei der Verwaltung deiner Spielstände und Daten für Pokémon-Spiele.",
   "welcome.head.2": "Eine Speicherdatei ist als Beispiel vorhanden, um die App zu testen, bevor Sie Ihre eigenen Spielstände und Daten hinzufügen.",
   "welcome.head.3": "Ich hoffe, diese App erfüllt Ihre Anforderungen. Bitte geben Sie gerne Ihr Feedback !",
-  "welcome.title": "Erster Start – Willkommen !"
+  "welcome.title": "Erster Start – Willkommen !",
+  "dex.list.loading": "Loading…",
+  "dex.tab.fusions": "Fusions",
+  "dex.tab.species": "Species",
+  "dex.tab.sync-fusions": "Sync fusions",
+  "storage.fusion-dex-sync.title": "Select multiple Pokédex to sync",
+  "storage.fusion-dex-sync.controls-label": "Select Pokédexes",
+  "storage.fusion-dex-sync.description": "Fusion Pokédex of each selection will share its seen/caught data, in both ways."
 }

@@ -5,6 +5,7 @@ public record DataDTO(
     DataDTOState<Dictionary<string, PkmVariantDTO?>>? MainPkmVariants,
     DataDTOState<Dictionary<string, PkmLegalityDTO?>>? MainPkmLegalities,
     DataDTOState<Dictionary<ushort, Dictionary<uint, DexItemDTO>>>? Dex,
+    DataDTOState<Dictionary<uint, List<FusionDexItemDTO>>>? FusionDex,
     List<DataSaveDTO>? Saves,
     bool InvalidateAllSaves,
     List<DataActionPayload>? Actions,

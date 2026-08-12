@@ -234,6 +234,17 @@ public class ActionService(
         );
     }
 
+    public async Task<DataUpdateFlags> FusionDexSync(uint[] saveIds)
+    {
+        using var scope = sp.CreateScope();
+
+        return await AddAction(
+            scope,
+            (scope) => scope.ServiceProvider.GetRequiredService<FusionDexSyncAction>(),
+            new(saveIds)
+        );
+    }
+
     public async Task<DataUpdateFlags> Save()
     {
         var flags = new DataUpdateFlags();

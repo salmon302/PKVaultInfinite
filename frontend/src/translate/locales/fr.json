@@ -332,5 +332,12 @@
   "welcome.head.1": "PKVault vous aide à gérer vos sauvegardes de jeux Pokémon et vos données.",
   "welcome.head.2": "Un fichier de sauvegarde est présent pour tester l'app, avant d'ajouter vos propres sauvegardes et données.",
   "welcome.head.3": "J'espère que cette app répondra à vos besoins. Envisagez de donner votre avis !",
-  "welcome.title": "Premier lancement - Bienvenue !"
+  "welcome.title": "Premier lancement - Bienvenue !",
+  "dex.list.loading": "Loading…",
+  "dex.tab.fusions": "Fusions",
+  "dex.tab.species": "Species",
+  "dex.tab.sync-fusions": "Sync fusions",
+  "storage.fusion-dex-sync.title": "Select multiple Pokédex to sync",
+  "storage.fusion-dex-sync.controls-label": "Select Pokédexes",
+  "storage.fusion-dex-sync.description": "Fusion Pokédex of each selection will share its seen/caught data, in both ways."
 }

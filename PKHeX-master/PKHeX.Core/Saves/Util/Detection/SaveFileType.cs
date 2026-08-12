@@ -35,7 +35,6 @@ public enum SaveFileType : byte
     LA,
     SV,
     ZA,
-    InfiniteFusion,
 
     // Side Games
     Colosseum,
@@ -51,6 +50,10 @@ public enum SaveFileType : byte
     Bulk3,
     Bulk4,
     Bulk7,
+
+    // Fan Games
+    /// <summary>Pokémon Infinite Fusion (Pokémon Essentials / RGSS <c>.rxdata</c> Ruby Marshal dump).</summary>
+    InfiniteFusion,
 }
 
 public static class SaveFileTypeExtensions
@@ -107,13 +110,13 @@ public static class SaveFileTypeExtensions
             BDSP => EntityContext.Gen8b,
             SV => EntityContext.Gen9,
             ZA => EntityContext.Gen9a,
-            InfiniteFusion => EntityContext.Gen9, // Essentials fangame; entities are emitted as PK9
 
             Colosseum or XD or RSBox => EntityContext.Gen3,
             Ranch or BattleRevolution => EntityContext.Gen4,
             Bulk3 => EntityContext.Gen3,
             Bulk4 => EntityContext.Gen4,
             Bulk7 => EntityContext.Gen7,
+            InfiniteFusion => EntityContext.Gen9, // Essentials fangame; entities are emitted as PK9
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
         };
     }

@@ -18,17 +18,40 @@ namespace PKHeX.Core;
 /// for the pair, so the <b>head</b> is used as the visible species and the pair is recorded in
 /// <see cref="Fusions"/> (compat spec §5 — proper fusion entities are a later milestone).
 ///
-/// Writing is currently non-destructive: <see cref="GetFinalData"/> returns the untouched original bytes.
-/// Re-marshaling edits back into the object graph is a later milestone.
-/// </remarks>
+    /// Writing re-marshals the object graph via <see cref="RubyMarshal.Save"/>, so edits that mutate the
+    /// in-memory graph (e.g. Pokédex <see cref="SetSeen"/>/<see cref="SetCaught"/>) are persisted.
+    /// </remarks>
 public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
 {
     public const int PartySlots = 6;
     public const int SlotsPerBox = 30;
 
+    /// <summary>RGSS/Essentials runs its frame counter at 40 fps.</summary>
+    private const int FramesPerSecond = 40;
+
     private readonly byte[] _rawData;
+    private readonly RbHash? _root;
     private readonly int _boxCount;
     private readonly string[] _boxNames;
+    private readonly int _language;
+
+    /// <summary>Per-save <c>@id_number</c> → Essentials symbol map, harvested from the save's own
+    /// <c>GameData::Species</c> objects (covers encountered species). Merged with the static
+    /// <see cref="IFSpeciesOrder"/> table for <see cref="GetIfIndex"/>.</summary>
+    private readonly Dictionary<ushort, int> _pkToIf;
+
+    private readonly RbArray? _seenStandard;
+    private readonly RbArray? _ownedStandard;
+
+    // Fusion-matrix Pokédex (head × body), indexed by IF dex number (1..577). See §9.5.
+    private readonly RbArray? _seenFusion;
+    private readonly RbArray? _ownedFusion;
+
+    /// <summary>Pokémon Essentials engine version the save was produced with (e.g. <c>19.1.dev</c>).</summary>
+    public string EssentialsVersion { get; }
+
+    /// <summary>Infinite Fusion game version the save was produced with (e.g. <c>6.8.2</c>).</summary>
+    public string GameVersionText { get; }
 
     /// <summary>Fusion head/body pairs, keyed by absolute storage index (see <see cref="GetBoxSlotFromIndex"/>).</summary>
     public IReadOnlyDictionary<int, FusionPair> Fusions { get; }
@@ -37,9 +60,9 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
     public IReadOnlyDictionary<int, FusionPair> PartyFusions { get; }
 
     /// <summary>A fused Pokémon's two component species (PKHeX species IDs, 0 when unmapped).</summary>
-    public readonly record struct FusionPair(ushort Head, ushort Body, string HeadName, string BodyName)
+    public readonly record struct FusionPair(ushort Head, ushort Body, string HeadName, string BodyName, string FusionName, byte[] Types)
     {
-        public override string ToString() => $"{HeadName}/{BodyName}";
+        public override string ToString() => string.IsNullOrEmpty(FusionName) ? $"{HeadName}/{BodyName}" : FusionName;
     }
 
     public SAV_InfiniteFusion(Memory<byte> data) : this(Parse(data.Span)) { }
@@ -47,10 +70,19 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
     private SAV_InfiniteFusion(SaveState state) : base(new byte[GetBufferSize(state.Boxes.Count)])
     {
         _rawData = state.Raw;
+        _root = state.Root;
         _boxCount = Math.Max(1, state.Boxes.Count);
         _boxNames = state.BoxNames;
+        _language = state.Language;
+        EssentialsVersion = state.EssentialsVersion;
+        GameVersionText = state.GameVersionText;
         Fusions = state.BoxFusions;
         PartyFusions = state.PartyFusions;
+        _seenStandard = state.SeenStandard;
+        _ownedStandard = state.OwnedStandard;
+        _seenFusion = state.SeenFusion;
+        _ownedFusion = state.OwnedFusion;
+        _pkToIf = BuildReverseMap(state.SaveSpeciesOrder);
 
         Party = 0;
         Box = PartySlots * PokeCrypto.SIZE_8PARTY;
@@ -62,6 +94,7 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
         PlayedHours = state.PlayedHours;
         PlayedMinutes = state.PlayedMinutes;
         PlayedSeconds = state.PlayedSeconds;
+        CurrentBox = Math.Clamp(state.CurrentBox, 0, _boxCount - 1);
 
         WriteEntities(state);
         PartyCount = Math.Min(state.Party.Count, PartySlots);
@@ -106,15 +139,25 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
     private sealed class SaveState
     {
         public byte[] Raw = [];
+        public RbHash? Root;
         public List<PK9> Party = [];
         public List<List<PK9?>> Boxes = [];
         public string[] BoxNames = [];
         public Dictionary<int, FusionPair> BoxFusions = [];
         public Dictionary<int, FusionPair> PartyFusions = [];
+        public RbArray? SeenStandard;
+        public RbArray? OwnedStandard;
+        public RbArray? SeenFusion;
+        public RbArray? OwnedFusion;
+        public Dictionary<int, string> SaveSpeciesOrder = [];
         public string OTName = PKHeX.Core.TrainerName.ProgramINT;
         public uint ID32;
         public byte TrainerGender;
         public uint Money;
+        public int Language = (int)LanguageID.English;
+        public int CurrentBox;
+        public string EssentialsVersion = string.Empty;
+        public string GameVersionText = string.Empty;
         public int PlayedHours;
         public int PlayedMinutes;
         public int PlayedSeconds;
@@ -125,16 +168,34 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
         var state = new SaveState { Raw = data.ToArray() };
         if (RubyMarshal.Load(data) is not RbHash top)
             throw new InvalidDataException("Infinite Fusion save root is not a Hash.");
+        state.Root = top;
+
+        if (top["essentials_version"] is RbString ev)
+            state.EssentialsVersion = ev.Text;
+        if (top["game_version"] is RbString gv)
+            state.GameVersionText = gv.Text;
 
         if (top["player"] is RbObject player)
         {
             ParseTrainer(state, player);
             ParseParty(state, player);
+            if (player["@pokedex"] is RbObject dex)
+            {
+                state.SeenStandard = dex["@seen_standard"] as RbArray;
+                state.OwnedStandard = dex["@owned_standard"] as RbArray;
+                state.SeenFusion = dex["@seen_fusion"] as RbArray;
+                state.OwnedFusion = dex["@owned_fusion"] as RbArray;
+            }
         }
-        if (top["PokemonStorage"] is RbObject storage)
+        if (top["storage_system"] is RbObject storage)
             ParseBoxes(state, storage);
-        if (top["framecount"] is RbFixnum frames)
-            SetPlayTime(state, frames.Value / 40); // RGSS runs at 40 fps
+        if (top["frame_count"] is { } frames)
+            SetPlayTime(state, ReadLong(frames) / FramesPerSecond);
+
+        // The save carries a GameData::Species (with @id_number + @id) for every species the
+        // player has encountered; harvest that id_number -> symbol map so the Pokédex flags can be
+        // decoded without the game's (encrypted) Data/species.dat. See IFSpeciesOrder / §9.8.
+        HarvestSpeciesOrder(top, state.SaveSpeciesOrder);
 
         if (state.Boxes.Count == 0)
             state.Boxes.Add([]);
@@ -164,11 +225,29 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
     {
         if (player["@name"] is RbString name && name.Text.Length != 0)
             state.OTName = name.Text;
-        if (ReadInt(player["@id"]) is > 0 and var id)
+        long id = ReadLong(player["@id"]);
+        if (id is > 0 and <= uint.MaxValue)
             state.ID32 = (uint)id;
-        state.TrainerGender = (byte)Math.Clamp(ReadInt(player["@gender"]), 0, 1);
-        if (ReadInt(player["@money"]) is > 0 and var money)
-            state.Money = (uint)money;
+        state.TrainerGender = ReadTrainerGender(player);
+        long money = ReadLong(player["@money"]);
+        if (money > 0)
+            state.Money = (uint)Math.Min(money, uint.MaxValue);
+        int language = ReadInt(player["@language"]);
+        if (language is > 0 and <= 10)
+            state.Language = language;
+    }
+
+    /// <summary>
+    /// Essentials does not store the player's gender directly; it is a property of the assigned trainer type
+    /// (<c>:POKEMONTRAINER_Red</c> / <c>:POKEMONTRAINER_Leaf</c>), whose PBS table is not part of the save.
+    /// </summary>
+    private static byte ReadTrainerGender(RbObject player)
+    {
+        if (player["@gender"] is { } explicitGender && explicitGender is not RbNil)
+            return (byte)Math.Clamp(ReadInt(explicitGender), 0, 1);
+        if (player["@trainer_type"] is RbSymbol type && type.Name.Contains("Leaf", StringComparison.OrdinalIgnoreCase))
+            return 1;
+        return 0;
     }
 
     private static void ParseParty(SaveState state, RbObject player)
@@ -217,13 +296,14 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
             state.Boxes.Add(slots);
         }
         state.BoxNames = [.. names];
+        state.CurrentBox = Math.Max(0, ReadInt(storage["@currentBox"]));
     }
 
     private static IEnumerable<RbValue?> EnumerateBoxSlots(RbValue? box) => box switch
     {
-        // PokemonStorage stores either a bare Array of slots or a PokemonBox object wrapping one.
-        RbArray arr => arr.Items,
+        // #PokemonBox / #StorageTransferBox wrap the slot array; a bare Array is also accepted.
         RbObject obj when obj["@pokemon"] is RbArray inner => inner.Items,
+        RbArray arr => arr.Items,
         _ => [],
     };
 
@@ -249,7 +329,11 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
             {
                 ushort head = ReadSpecies(speciesData["@head_pokemon"]);
                 ushort body = ReadSpecies(speciesData["@body_pokemon"]);
-                fusion = new FusionPair(head, body, SpeciesLabel(head), SpeciesLabel(body));
+                string fusionName = speciesData["@real_name"] is RbString real && real.Text.Length != 0
+                    ? Truncate(real.Text)
+                    : string.Empty;
+                byte[] fusionTypes = GetFusionTypes(speciesData);
+                fusion = new FusionPair(head, body, SpeciesLabel(head), SpeciesLabel(body), fusionName, fusionTypes);
                 species = head != 0 ? head : body;
             }
             else
@@ -262,7 +346,18 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
                 return pk;
 
             pk.Form = (byte)Math.Clamp(ReadInt(poke["@form"]), 0, byte.MaxValue);
-            pk.Gender = (byte)Math.Clamp(ReadInt(poke["@gender"]), 0, 2);
+
+            // Gender must follow the projected species' gender ratio. Essentials stores the fusion's
+            // own gender, but a genderless/fixed-gender head (e.g. Regigigas) cannot legitimately
+            // take it, so the head species' inherent gender wins for display consistency.
+            var genderRatio = pk.PersonalInfo.Gender;
+            pk.Gender = genderRatio switch
+            {
+                255 => 2, // genderless
+                0 => 0,   // male-only
+                254 => 1, // female-only
+                _ => (byte)Math.Clamp(ReadInt(poke["@gender"]), 0, 1),
+            };
 
             uint pid = (uint)ReadLong(poke["@personalID"]);
             if (pid != 0)
@@ -277,25 +372,43 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
             ReadStats(poke["@ev"], out var evs);
             pk.SetEVs(evs);
 
-            int abilityIndex = ReadInt(poke["@ability_index"]);
+            int abilityIndex = Math.Clamp(ReadInt(poke["@ability_index"]), 0, 2);
             pk.AbilityNumber = abilityIndex switch { 0 => 1, 1 => 2, _ => 4 };
             pk.RefreshAbility(abilityIndex);
 
             pk.CurrentFriendship = (byte)Math.Clamp(ReadInt(poke["@happiness"]), 0, byte.MaxValue);
-            pk.Ball = (byte)Ball.Poke;
+            pk.Ball = (byte)(poke["@poke_ball"] is RbSymbol ball ? IFNameLookup.GetBall(ball.Name) : Ball.Poke);
+            if (poke["@item"] is RbSymbol item)
+            {
+                var itemId = IFNameLookup.GetItem(item.Name);
+                // Keep only items that are legal held items in the SV context; fan-game / unreleased
+                // items would otherwise trip the "Held item is unreleased" legality check.
+                if (itemId != 0 && Array.IndexOf(Legal.HeldItems_SV, itemId) >= 0)
+                    pk.HeldItem = itemId;
+            }
 
             ReadMoves(pk, poke["@moves"]);
             ReadLevel(pk, poke);
 
             if (poke["@owner"] is RbObject owner)
                 ReadOwner(pk, owner);
+            else
+                pk.Language = (int)LanguageID.English;
 
-            pk.Nickname = ReadNickname(poke, pk, fusion);
-            pk.IsNicknamed = poke["@name"] is RbString { Text.Length: > 0 };
-            pk.Language = (int)LanguageID.English;
+            pk.Nickname = ReadNickname(poke, pk, speciesData, fusion, out bool nicknamed);
+            pk.IsNicknamed = nicknamed;
             pk.Version = GameVersion.SV;
-            pk.MetLevel = pk.CurrentLevel;
+            pk.MetLevel = (byte)Math.Clamp(ReadInt(poke["@obtain_level"]), 1, pk.CurrentLevel);
+            pk.IsEgg = ReadInt(poke["@steps_to_hatch"]) > 0;
             pk.CurrentHandler = 0;
+
+            // Essentials stores an explicit shiny flag; nil means "derive from the personal ID".
+            // PKHeX derives shininess from PID+ID32, which will not agree, so force the recorded state.
+            if (poke["@shiny"] is RbBool { Value: true })
+                pk.SetShiny();
+            else if (pk.IsShiny)
+                pk.SetUnshiny();
+
             pk.HealPP();
             pk.ResetPartyStats();
         }
@@ -309,18 +422,17 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
 
     private static void ReadLevel(PK9 pk, RbObject poke)
     {
-        int exp = ReadInt(poke["@exp"]);
-        if (exp > 0)
+        byte level = (byte)Math.Clamp(ReadInt(poke["@level"]), 0, 100);
+        uint exp = (uint)Math.Max(0, ReadLong(poke["@exp"]));
+        if (exp != 0)
         {
-            pk.EXP = (uint)exp;
-            // Clamp to the growth curve so PKHeX doesn't report an out-of-range level.
-            byte level = Experience.GetLevel(pk.EXP, pk.PersonalInfo.EXPGrowth);
-            if (level is 0 or > 100)
-                pk.CurrentLevel = 1;
-            return;
+            pk.EXP = exp;
+            // Fusions use a blended growth rate, so the head's curve may disagree with the stored level.
+            var derived = Experience.GetLevel(exp, pk.PersonalInfo.EXPGrowth);
+            if (level == 0 || derived == level)
+                return;
         }
-        int level2 = ReadInt(poke["@level"]);
-        pk.CurrentLevel = (byte)Math.Clamp(level2 is 0 ? 1 : level2, 1, 100);
+        pk.CurrentLevel = level == 0 ? (byte)1 : level;
     }
 
     private static void ReadMoves(PK9 pk, RbValue? moves)
@@ -334,10 +446,10 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
                 break;
             if (entry is not RbObject move)
                 continue;
-            var id = ReadMove(move["@id"]);
-            if (id == 0)
-                continue;
-            pk.SetMove(i, id);
+            // Keep the slot even when the move is unknown, so the remaining moves stay in their original slots.
+            var moveId = ReadMove(move["@id"]);
+            if (moveId != 0 && moveId <= Legal.MaxMoveID_9)
+                pk.SetMove(i, moveId);
             SetMovePPUps(pk, i, Math.Clamp(ReadInt(move["@ppup"]), 0, 3));
             i++;
         }
@@ -360,17 +472,27 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
             pk.OriginalTrainerName = s.Text;
         pk.OriginalTrainerGender = (byte)Math.Clamp(ReadInt(owner["@gender"]), 0, 1);
         long id = ReadLong(owner["@id"]);
-        if (id > 0)
+        if (id is > 0 and <= uint.MaxValue)
             pk.ID32 = (uint)id;
+        int language = ReadInt(owner["@language"]);
+        pk.Language = language is > 0 and <= 10 ? language : (int)LanguageID.English;
     }
 
-    private static string ReadNickname(RbObject poke, PK9 pk, FusionPair? fusion)
+    private static string ReadNickname(RbObject poke, PK9 pk, RbObject? speciesData, FusionPair? fusion, out bool nicknamed)
     {
+        nicknamed = true;
         if (poke["@name"] is RbString s && s.Text.Length != 0)
             return Truncate(s.Text);
-        if (fusion is { } pair)
-            return Truncate(pair.ToString());
-        return SpeciesName.GetSpeciesNameGeneration(pk.Species, (int)LanguageID.English, 9);
+        if (fusion is not null)
+        {
+            // Infinite Fusion generates a portmanteau name ("Scrafsharp") for every fusion; it is the closest
+            // thing to a real species name the pair has, so surface it instead of the head species' name.
+            if (speciesData?["@real_name"] is RbString real && real.Text.Length != 0)
+                return Truncate(real.Text);
+            return Truncate(fusion.Value.ToString());
+        }
+        nicknamed = false;
+        return SpeciesName.GetSpeciesNameGeneration(pk.Species, pk.Language, 9);
     }
 
     private static string Truncate(string value) => value.Length <= 12 ? value : value[..12];
@@ -414,6 +536,24 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
         _ => 0,
     };
 
+    private static byte GetFusionType(RbValue? value) => value switch
+    {
+        RbSymbol sym => IFNameLookup.GetType(sym.Name),
+        RbString str => IFNameLookup.GetType(str.Text),
+        _ => 0,
+    };
+
+    /// <summary>Reads the merged <c>@type1</c>/<c>@type2</c> of a <c>GameData::FusedSpecies</c> as PKHeX display type ids.</summary>
+    private static byte[] GetFusionTypes(RbObject speciesData)
+    {
+        var t = new List<byte>();
+        byte t1 = GetFusionType(speciesData["@type1"]);
+        byte t2 = GetFusionType(speciesData["@type2"]);
+        if (t1 != 0) t.Add(t1);
+        if (t2 != 0 && t2 != t1) t.Add(t2);
+        return [.. t];
+    }
+
     private static ushort ReadSpeciesObject(RbObject obj)
     {
         // Prefer the symbolic id (:PIKACHU); it survives Infinite Fusion's custom dex numbering.
@@ -440,7 +580,7 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
 
     #region SaveFile contract
     public override string Extension => ".rxdata";
-    public override GameVersion Version { get; set; } = GameVersion.SV;
+    public override GameVersion Version { get; set; } = GameVersion.InfiniteFusion;
     public override byte Generation => 9;
     public override EntityContext Context => EntityContext.Gen9; // entities are emitted as PK9
     public override bool ChecksumsValid => true;
@@ -483,9 +623,167 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
         => StringConverter8.SetString(destBuffer, value, maxLength, option);
 
     protected override SaveFile CloneInternal() => new SAV_InfiniteFusion(_rawData);
-    protected internal override string ShortSummary => $"{OT} - Infinite Fusion";
+    protected internal override string ShortSummary => $"{OT} - Infinite Fusion {GameVersionText}";
+    public override string MiscSaveInfo() => $"Pokémon Infinite Fusion {GameVersionText} (Essentials {EssentialsVersion})";
+    public override int Language { get => _language; set { } }
 
-    /// <summary>Infinite Fusion saves are read-only for now; export the original Marshal stream untouched.</summary>
-    protected override Memory<byte> GetFinalData() => _rawData;
+    // Essentials stores one 32-bit trainer ID; keep the 16-bit halves in sync with it.
+    public override uint ID32 { get; set; }
+    public override ushort TID16
+    {
+        get => (ushort)ID32;
+        set => ID32 = (uint)((SID16 << 16) | value);
+    }
+
+    public override ushort SID16
+    {
+        get => (ushort)(ID32 >> 16);
+        set => ID32 = (uint)((value << 16) | TID16);
+    }
+
+    /// <summary>Infinite Fusion saves expose a Pokédex once the species-order table is available (§9.5/§9.8).</summary>
+    public override bool HasPokeDex => true;
+
+    public override bool GetSeen(ushort species)
+    {
+        int idx = GetIfIndex(species);
+        return idx > 0 && _seenStandard is { } arr && idx < arr.Count && arr[idx] is RbBool b && b.Value;
+    }
+
+    public override bool GetCaught(ushort species)
+    {
+        int idx = GetIfIndex(species);
+        return idx > 0 && _ownedStandard is { } arr && idx < arr.Count && arr[idx] is RbBool b && b.Value;
+    }
+
+    public override void SetSeen(ushort species, bool seen)
+    {
+        int idx = GetIfIndex(species);
+        if (idx > 0 && _seenStandard is { } arr && idx < arr.Count)
+            arr.Items[idx] = new RbBool(seen);
+    }
+
+    public override void SetCaught(ushort species, bool caught)
+    {
+        int idx = GetIfIndex(species);
+        if (idx > 0 && _ownedStandard is { } arr && idx < arr.Count)
+            arr.Items[idx] = new RbBool(caught);
+    }
+
+    // ---- Fusion-matrix Pokédex (head × body) — §9.5 ----
+
+    /// <summary>True when the fusion of <paramref name="head"/> over <paramref name="body"/> (IF dex numbers 1..577) has been seen.</summary>
+    public bool GetFusionSeen(int head, int body)
+    {
+        var row = GetFusionRow(_seenFusion, head);
+        return row is { } r && body >= 1 && body < r.Count && r.Items[body] is RbBool b && b.Value;
+    }
+
+    /// <summary>True when the fusion of <paramref name="head"/> over <paramref name="body"/> (IF dex numbers 1..577) has been caught.</summary>
+    public bool GetFusionCaught(int head, int body)
+    {
+        var row = GetFusionRow(_ownedFusion, head);
+        return row is { } r && body >= 1 && body < r.Count && r.Items[body] is RbBool b && b.Value;
+    }
+
+    public void SetFusionSeen(int head, int body, bool seen)
+    {
+        if (GetFusionRow(_seenFusion, head) is { } r && body >= 1 && body < r.Count)
+            r.Items[body] = new RbBool(seen);
+    }
+
+    public void SetFusionCaught(int head, int body, bool caught)
+    {
+        if (GetFusionRow(_ownedFusion, head) is { } r && body >= 1 && body < r.Count)
+            r.Items[body] = new RbBool(caught);
+    }
+
+    private static RbArray? GetFusionRow(RbArray? matrix, int head)
+    {
+        if (matrix is null || head < 1 || head >= matrix.Count)
+            return null;
+        return matrix.Items[head] as RbArray;
+    }
+
+    /// <summary>Maps a PKHeX species id to this save's IF dex index (1..577), or -1 when the species
+    /// is not part of Infinite Fusion. Merges the static <see cref="IFSpeciesOrder"/> with the per-save
+    /// species order harvested at parse time.</summary>
+    public int GetIfIndex(ushort species)
+    {
+        if (_pkToIf.TryGetValue(species, out var v))
+            return v;
+        return IFSpeciesOrder.GetIndex(species);
+    }
+
+    private static Dictionary<ushort, int> BuildReverseMap(Dictionary<int, string> saveOrder)
+    {
+        var d = new Dictionary<ushort, int>();
+        // Static canonical table first.
+        for (int i = 1; i <= IFSpeciesOrder.Count; i++)
+        {
+            var pk = IFSpeciesOrder.GetSpecies(i);
+            if (pk != 0)
+                d.TryAdd(pk, i);
+        }
+        // Per-save harvested species (encountered) override/extend the static table.
+        foreach (var kv in saveOrder)
+        {
+            var pk = IFNameLookup.GetSpecies(kv.Value);
+            if (pk != 0)
+                d.TryAdd(pk, kv.Key);
+        }
+        return d;
+    }
+
+    /// <summary>Walks the RGSS object graph and records every <c>GameData::Species</c>'s
+    /// <c>@id_number</c> → <c>@id</c> symbol (the save carries one per encountered species).</summary>
+    private static void HarvestSpeciesOrder(RbValue? root, Dictionary<int, string> order)
+    {
+        var visited = new HashSet<RbValue>(ReferenceEqualityComparer.Instance);
+        WalkSpecies(root, order, visited);
+    }
+
+    private static void WalkSpecies(RbValue? v, Dictionary<int, string> order, HashSet<RbValue> visited)
+    {
+        if (v is null || !visited.Add(v))
+            return;
+        switch (v)
+        {
+            case RbObject o:
+                if (o.ClassName.Name == "GameData::Species")
+                {
+                    int id = (int)ReadLong(o["@id_number"]);
+                    string? sym = o["@id"] switch
+                    {
+                        RbSymbol s => s.Name,
+                        RbString s => s.Text,
+                        _ => null,
+                    };
+                    if (id is >= 1 and <= 578 && sym is not null && !order.ContainsKey(id))
+                        order[id] = sym;
+                }
+                foreach (var kv in o.IVariables)
+                {
+                    WalkSpecies(kv.Key, order, visited);
+                    WalkSpecies(kv.Value, order, visited);
+                }
+                break;
+            case RbArray a:
+                foreach (var it in a.Items)
+                    WalkSpecies(it, order, visited);
+                break;
+            case RbHash h:
+                foreach (var kv in h.Pairs)
+                {
+                    WalkSpecies(kv.Key, order, visited);
+                    WalkSpecies(kv.Value, order, visited);
+                }
+                break;
+        }
+    }
+
+        /// <summary>Re-marshals the (possibly edited) object graph back into a Ruby Marshal stream so
+        /// mutations such as <see cref="SetSeen"/>/<see cref="SetCaught"/> survive <see cref="Write"/>.</summary>
+        protected override Memory<byte> GetFinalData() => _root is { } r ? RubyMarshal.Save(r) : _rawData;
     #endregion
 }

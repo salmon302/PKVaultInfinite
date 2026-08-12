@@ -332,5 +332,12 @@
   "welcome.head.1": "Bem-vindo ao PKVault!",
   "welcome.head.2": "Seu organizador centralizado.",
   "welcome.head.3": "Comece adicionando seus arquivos de save.",
-  "welcome.title": "Bem-vindo"
+  "welcome.title": "Bem-vindo",
+  "dex.list.loading": "Loading…",
+  "dex.tab.fusions": "Fusions",
+  "dex.tab.species": "Species",
+  "dex.tab.sync-fusions": "Sync fusions",
+  "storage.fusion-dex-sync.title": "Select multiple Pokédex to sync",
+  "storage.fusion-dex-sync.controls-label": "Select Pokédexes",
+  "storage.fusion-dex-sync.description": "Fusion Pokédex of each selection will share its seen/caught data, in both ways."
 }

@@ -183,7 +183,6 @@ public static class SaveUtil
         if (IsG8LA(data)) return LA;
         if (IsG9SV(data)) return SV;
         if (IsG9ZA(data)) return ZA;
-        if (IsGInfiniteFusion(data)) return InfiniteFusion;
 
         // Side-game
         if (IsG3Colosseum(data)) return Colosseum;
@@ -199,6 +198,9 @@ public static class SaveUtil
         if (SAV2Stadium.IsStadium(data)) return Stadium2;
         if (SAV1Stadium.IsStadium(data)) return Stadium1;
         if (SAV1StadiumJ.IsStadium(data)) return Stadium1J;
+
+        // Fan games (checked last: variable-size formats must never shadow an official save).
+        if (IsGInfiniteFusion(data)) return InfiniteFusion;
 
         return SaveTypeInfo.Invalid;
     }

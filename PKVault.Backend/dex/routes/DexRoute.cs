@@ -23,4 +23,10 @@ public class DexController(DexService dexService, DexDataService dexDataService)
     {
         return dexDataService.GetMoves(context, species, form);
     }
+
+    [HttpGet("fusions")]
+    public async Task<ActionResult<Dictionary<uint, List<FusionDexItemDTO>>>> GetFusions()
+    {
+        return await dexService.GetFusionDex();
+    }
 }

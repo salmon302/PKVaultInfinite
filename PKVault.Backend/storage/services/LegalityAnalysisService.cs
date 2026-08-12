@@ -29,6 +29,15 @@ public class LegalityAnalysisService(ISettingsService settingsService) : ILegali
             return new(null);
         }
 
+        // Pokémon originating from fan-game saves (e.g. Infinite Fusion) are not official Gen9
+        // entities. Running the standard legality analysis against them only produces false
+        // "Invalid" results (encounter match, HOME tracker, obedience, generation transfer, …),
+        // none of which are meaningful for a mon that was never in an official game.
+        if (save?.GetSave() is SAV_InfiniteFusion)
+        {
+            return new(null);
+        }
+
         return new(GetLegalitySafeRaw(pkm, save, slotType));
     }
 

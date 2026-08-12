@@ -233,6 +233,9 @@ public abstract class DexGenService(SaveFile save) //where Save : SaveFile
     protected abstract IEnumerable<LanguageID> GetDexLanguages(ushort species);
 
     public abstract Task EnableSpeciesForm(EnableSpeciesFormPayload payload);
+
+    /// <summary>Fusion-matrix Pokédex entries (head × body). Empty for saves that have no fusion dex.</summary>
+    public virtual List<FusionDexItemDTO> GetFusionDex() => [];
 }
 
 public record EnableSpeciesFormPayload(ushort Species, byte Form, Gender Gender, bool IsSeen, bool IsSeenShiny, bool IsSeenAlpha, bool IsCaught, LanguageID[] Languages);

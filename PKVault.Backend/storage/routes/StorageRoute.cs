@@ -199,6 +199,14 @@ public class StorageController(DataService dataService, StorageQueryService stor
         return await dataService.CreateDataFromUpdateFlags(flags);
     }
 
+    [HttpPut("dex/fusions/sync")]
+    public async Task<ActionResult<DataDTO>> FusionDexSync([FromQuery] uint[] saveIds)
+    {
+        var flags = await actionService.FusionDexSync(saveIds);
+
+        return await dataService.CreateDataFromUpdateFlags(flags);
+    }
+
     [HttpGet("pkm/available-moves")]
     public async Task<ActionResult<List<MoveItem>>> GetPkmAvailableMoves(uint? saveId, string pkmId)
     {

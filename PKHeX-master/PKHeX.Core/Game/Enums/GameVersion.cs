@@ -518,5 +518,11 @@ public enum GameVersion : byte
     /// Emerald &amp; FireRed &amp; LeafGreen version group.
     /// </summary>
     EFL,
+
+    /// <summary>
+    /// Pokémon Infinite Fusion (Pokémon Essentials / RGSS fangame). Not an official version; used so the
+    /// fork's <see cref="SAV_InfiniteFusion"/> reports a friendly version label.
+    /// </summary>
+    InfiniteFusion,
     #endregion
 }

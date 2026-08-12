@@ -284,6 +284,7 @@ public class Program
         services.AddScoped<EvolvePkmAction>();
         services.AddScoped<SortPkmAction>();
         services.AddScoped<DexSyncAction>();
+        services.AddScoped<FusionDexSyncAction>();
 
         Log.Information($"Setup services - Loaders");
         services.AddScoped<IMetaLoader, MetaLoader>();

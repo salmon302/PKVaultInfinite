@@ -712,18 +712,31 @@ public class GenStaticOthers(
     {
         var pokeapiVersions = await Task.WhenAll(GetPokeApiVersion(version));
 
-        return string.Join('/', pokeapiVersions
+        var name = string.Join('/', pokeapiVersions
             .OfType<PokeApi.Models.Version>()
             .Select(ver =>
             {
-                var name = PokeApiService.GetNameForLang(ver.Names, lang);
+                var n = PokeApiService.GetNameForLang(ver.Names, lang);
                 // blue-japan, duplicate name with blue
                 if (ver.Id == 46)
                 {
-                    return $"{name} (J)";
+                    return $"{n} (J)";
                 }
-                return name;
+                return n;
             }).Distinct());
+
+        // Fan-game / non-pokeapi versions (e.g. Infinite Fusion) have no pokeapi entry; fall back to a
+        // human-friendly name derived from the enum identifier.
+        if (string.IsNullOrEmpty(name))
+        {
+            name = version switch
+            {
+                GameVersion.InfiniteFusion => "Infinite Fusion",
+                _ => version.ToString().Replace("GO", " GO", StringComparison.Ordinal),
+            };
+        }
+
+        return name;
     }
 
     private async Task<string[]> GetVersionRegionName(GameVersion version, string lang)
@@ -780,6 +793,7 @@ public class GenStaticOthers(
         {
             GameVersion.Any => [],
             GameVersion.Invalid => [],
+            GameVersion.InfiniteFusion => [], // fangame (Essentials); no pokeapi version
 
             #region Gen3
             GameVersion.S => [pokeApiService.GetVersion(8)],

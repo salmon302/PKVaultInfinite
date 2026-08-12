@@ -1,6 +1,8 @@
 /**
  * Data response after action, providing only data mutated.
  */
+using PKHeX.Core;
+
 public class DataService(
     ILogger<DataService> log,
     ISessionService sessionService, StorageQueryService storageQueryService, StaticDataService staticDataService,
@@ -102,7 +104,8 @@ public class DataService(
             InvalidateAllSaves: flags.Saves.All,
             SaveInfos: saveInfos,
             Backups: backups,
-            Dex: await dexTask
+            Dex: await dexTask,
+            FusionDex: await GetPossibleFusionDex(flags.Dex)
         );
 
         // time = log.Time("Response serialization");
@@ -153,6 +156,22 @@ public class DataService(
         }
 
         return null;
+    }
+
+    private async Task<DataDTOState<Dictionary<uint, List<FusionDexItemDTO>>>?> GetPossibleFusionDex(DataUpdateFlagsState flag)
+    {
+        if (!flag.All && flag.Ids.Count == 0)
+        {
+            return null;
+        }
+
+        var saveLoaders = savesLoadersService.GetAllLoaders();
+        uint[] ids;
+        if (flag.All)
+            ids = [FakeSaveFile.Default.ID32, .. saveLoaders.Select(sl => sl.Save.Id)];
+        else
+            ids = [.. flag.Ids.Select(uint.Parse)];
+        return new(All: flag.All, Data: await dexService.GetFusionDex(ids));
     }
 
     private async Task<DataDTOState<Dictionary<string, BankDTO?>>?> GetPossibleMainBanks(DataUpdateFlagsState flag)

@@ -52,6 +52,50 @@ public class DexService(
         return dex;
     }
 
+    public async Task<Dictionary<uint, List<FusionDexItemDTO>>> GetFusionDex()
+    {
+        var saveLoaders = savesLoadersService.GetAllLoaders();
+        uint[] ids;
+        if (saveLoaders.Length == 0)
+            ids = [FakeSaveFile.Default.ID32];
+        else
+            ids = [FakeSaveFile.Default.ID32, .. saveLoaders.Select(sl => sl.Save.Id)];
+        return await GetFusionDex(ids);
+    }
+
+    public async Task<Dictionary<uint, List<FusionDexItemDTO>>> GetFusionDex(uint[] saveIds)
+    {
+        if (saveIds.Length == 0)
+        {
+            return [];
+        }
+
+        List<SaveWrapper> saves = [.. saveIds.Select(id => id == FakeSaveFile.Default.ID32
+            ? new(FakeSaveFile.Default)
+            : savesLoadersService.GetLoaders(id).Save
+        )];
+
+        Dictionary<uint, List<FusionDexItemDTO>> dex = [];
+
+        using var _ = log.Time($"Update Fusion Dex with {saves.Count} saves");
+
+        foreach (var save in saves)
+        {
+            var service = GetDexService(save);
+            if (service == null)
+            {
+                continue;
+            }
+            var items = service.GetFusionDex();
+            if (items.Count > 0)
+            {
+                dex[save.Id] = items;
+            }
+        }
+
+        return dex;
+    }
+
     public DexGenService? GetDexService(SaveWrapper save)
     {
         DexGenService? notHandled(SaveWrapper save)
@@ -79,6 +123,7 @@ public class DexService(
             SAV8LA la => new Dex8LAService(la),
             SAV9SV sv => new Dex9SVService(sv),
             SAV9ZA za => new Dex9ZAService(za),
+            SAV_InfiniteFusion ifSave => new DexIFService(ifSave),
             _ => notHandled(save),
         };
     }
