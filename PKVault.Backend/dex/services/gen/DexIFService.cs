@@ -84,9 +84,12 @@ public class DexIFService(SAV_InfiniteFusion save) : DexGenService(save)
 
             string headName = SpeciesName.GetSpeciesNameGeneration(headSp, lang, 9);
             string bodyName = SpeciesName.GetSpeciesNameGeneration(bodySp, lang, 9);
+            List<byte> realizedTypes = null;
             string fusionName = realized.TryGetValue((headSp, bodySp), out var r) && r.Name.Length > 0
                 ? r.Name
                 : $"{headName}/{bodyName}";
+            if (r.Types is { Count: > 0 })
+                realizedTypes = r.Types;
 
             result.Add(new FusionDexItemDTO(
                 Id: $"{headSp}_{bodySp}_{save.ID32}",
@@ -96,7 +99,7 @@ public class DexIFService(SAV_InfiniteFusion save) : DexGenService(save)
                 HeadName: headName,
                 BodyName: bodyName,
                 FusionName: fusionName,
-                Types: r.Types.Count > 0 ? r.Types : GetFusionTypes(headSp, bodySp),
+                Types: realizedTypes ?? GetFusionTypes(headSp, bodySp),
                 IsSeen: seen,
                 IsCaught: caught
             ));

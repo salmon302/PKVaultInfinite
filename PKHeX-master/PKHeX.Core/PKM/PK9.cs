@@ -5,7 +5,7 @@ using static System.Buffers.Binary.BinaryPrimitives;
 namespace PKHeX.Core;
 
 /// <summary> Generation 9 <see cref="PKM"/> format. </summary>
-public sealed class PK9 : PKM, ISanityChecksum, ITeraType, ITechRecord, IObedienceLevel, IHandlerUpdate,
+public class PK9 : PKM, ISanityChecksum, ITeraType, ITechRecord, IObedienceLevel, IHandlerUpdate,
     IContestStats, IHyperTrain, IScaledSize, IScaledSize3, IFavorite, IHandlerLanguage, IFormArgument, IHomeTrack, IBattleVersion, ITrainerMemories, IAppliedMarkings7,
     IRibbonIndex, IRibbonSetAffixed, IRibbonSetRibbons, IRibbonSetEvent3, IRibbonSetEvent4, IRibbonSetCommon3, IRibbonSetCommon4, IRibbonSetCommon6, IRibbonSetMemory6, IRibbonSetCommon7, IRibbonSetCommon8, IRibbonSetCommon9, IRibbonSetMarks, IRibbonSetMark8, IRibbonSetMark9
 {

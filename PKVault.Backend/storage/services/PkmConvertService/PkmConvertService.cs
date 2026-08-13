@@ -64,11 +64,20 @@ public class PkmConvertService(ILogger<PkmConvertService> log, ISettingsService 
     {
         // log.LogInformation($"Convert recursive {current.GetType().Name} -> {targetType.Name}");
 
-        var currentValue = GetPKMTypeWeight(current.GetType());
+        var currentType = current.GetType();
+        var currentValue = GetPKMTypeWeight(currentType);
         var targetValue = GetPKMTypeWeight(targetType);
         var direction = targetValue - currentValue;
 
-        if (current.GetType() == targetType)
+        // Surface unknown (not-yet-supported) types explicitly instead of letting the
+        // converter brute-force a wrong path.
+        if (!PkmTypeWeights.ContainsKey(currentType.Name) || !PkmTypeWeights.ContainsKey(targetType.Name))
+        {
+            log.LogWarning($"Conversion not yet supported: {currentType.Name} -> {targetType.Name}");
+            throw new NotSupportedException($"Conversion not yet supported for {currentType.Name} -> {targetType.Name}");
+        }
+
+        if (currentType == targetType)
             return current;
 
         if (direction > 0)
@@ -90,7 +99,7 @@ public class PkmConvertService(ILogger<PkmConvertService> log, ISettingsService 
                 return ConvertRecursive(backward, targetType, fallbackLang, rndValues);
         }
 
-        throw new InvalidOperationException($"No conversion path from {current.GetType().Name} to {targetType.Name}");
+        throw new InvalidOperationException($"No conversion path from {currentType.Name} to {targetType.Name}");
     }
 
     private PKM? TryPKToVariant(PKM source, Type targetType, PKMRndValues? rndValues)
@@ -213,27 +222,56 @@ public class PkmConvertService(ILogger<PkmConvertService> log, ISettingsService 
         };
     }
 
-    private static int GetPKMTypeWeight(Type pkmType) => pkmType.Name switch
+    // Hand-tuned ordering for known types. Variants are interleaved within a
+    // generation so the converter can step PK3 -> CK3 -> PK4 etc.
+    private static readonly Dictionary<string, int> PkmTypeWeights = new(StringComparer.Ordinal)
     {
-        "PK1" => 0,
-        "PK2" => 1,
-        "SK2" => 2,
-        "PK3" => 3,
-        "CK3" => 4,
-        "XK3" => 5,
-        "PK4" => 6,
-        "BK4" => 7,
-        "RK4" => 8,
-        "PK5" => 9,
-        "PK6" => 10,
-        "PK7" => 11,
-        "PB7" => 12,
-        "PK8" => 13,
-        "PB8" => 14,
-        "PA8" => 15,
-        "PK9" => 16,
-        "PA9" => 17,
-
-        _ => throw new ArgumentException($"PKM type not handled: {pkmType}"),
+        ["PK1"] = 0,
+        ["PK2"] = 1,
+        ["SK2"] = 2,
+        ["PK3"] = 3,
+        ["CK3"] = 4,
+        ["XK3"] = 5,
+        ["PK4"] = 6,
+        ["BK4"] = 7,
+        ["RK4"] = 8,
+        ["PK5"] = 9,
+        ["PK6"] = 10,
+        ["PK7"] = 11,
+        ["PB7"] = 12,
+        ["PK8"] = 13,
+        ["PB8"] = 14,
+        ["PA8"] = 15,
+        ["PK9"] = 16,
+        ["PA9"] = 17,
+        ["PKF"] = 18,
     };
+
+    private static int GetPKMTypeWeight(Type pkmType)
+    {
+        if (PkmTypeWeights.TryGetValue(pkmType.Name, out var weight))
+            return weight;
+
+        // Unknown type (e.g. a future generation not yet wired into the converter).
+        // Derive a stable numeric weight from the embedded generation so the
+        // conversion direction can still be computed instead of crashing. The actual
+        // conversion then fails gracefully as "not yet supported".
+        return GetGenerationFromTypeName(pkmType.Name) * 100;
+    }
+
+    private static int GetGenerationFromTypeName(string name)
+    {
+        var digits = 0;
+        var any = false;
+        foreach (var c in name)
+        {
+            if (c is >= '0' and <= '9')
+            {
+                digits = digits * 10 + (c - '0');
+                any = true;
+            }
+        }
+
+        return any ? digits : 99;
+    }
 }

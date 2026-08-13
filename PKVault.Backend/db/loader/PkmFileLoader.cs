@@ -205,14 +205,46 @@ public class PkmFileLoader : IPkmFileLoader
         PKM pkm;
         try
         {
+            if (!PkmVaultEnvelope.TryUnwrap(entity.Data, out var raw, out var storedContext, out var storedVersion, out var envError))
+            {
+                Log.Error($"PKVault envelope malformed for {filepath}: {envError}");
+                return new(GetPlaceholderPKM(), PKMLoadError.QUARANTINE);
+            }
+
+            if (storedContext != null && storedContext != context)
+            {
+                Log.Warning($"PKVault envelope context {storedContext} does not match storage folder context {context} for {filepath}");
+            }
+
             var ext = Path.GetExtension(filepath.AsSpan());
 
-            FileUtil.TryGetPKM(entity.Data, out var pk, ext, new SimpleTrainerInfo() { Context = context });
+            FileUtil.TryGetPKM(raw, out var pk, ext, new SimpleTrainerInfo() { Context = context });
             if (pk == null)
             {
-                throw new Exception($"TryGetPKM gives null pkm, path={filepath} bytes.length={entity.Data.Length}");
+                // A PKHeX version drift is the likely cause of an unreadable enveloped file:
+                // quarantine it instead of silently falling back to a placeholder.
+                if (storedVersion != null && storedVersion != PkmVaultEnvelope.GetPkhexVersion())
+                {
+                    Log.Error($"PKM load failure after PKHeX version drift (stored={storedVersion}) for {filepath}");
+                    return new(GetPlaceholderPKM(), PKMLoadError.QUARANTINE);
+                }
+
+                throw new Exception($"TryGetPKM gives null pkm, path={filepath} bytes.length={raw.Length}");
             }
             pkm = pk;
+
+            // Re-normalize: when the stored PKHeX version differs, re-read the raw bytes
+            // under the current PKHeX and re-stamp the envelope so future reads are not
+            // subject to silent byte-layout drift. Marks the entity for re-persist.
+            var currentVersion = PkmVaultEnvelope.GetPkhexVersion();
+            if (storedVersion != null && storedVersion != currentVersion)
+            {
+                Log.Information($"PKVault re-normalizing {filepath} (PKHeX {storedVersion} -> {currentVersion})");
+                var party = new byte[pkm.SIZE_PARTY];
+                pkm.WriteDecryptedDataParty(party);
+                entity.Data = PkmVaultEnvelope.Wrap(party, pkm.Context, currentVersion);
+                entity.Updated = true;
+            }
         }
         catch (Exception ex)
         {
@@ -228,7 +260,7 @@ public class PkmFileLoader : IPkmFileLoader
 
     public byte[] GetPKMBytes(ImmutablePKM pkm)
     {
-        return pkm.GetDecryptedDataParty();
+        return PkmVaultEnvelope.Wrap(pkm.GetDecryptedDataParty(), pkm.Context);
     }
 
     private PKM GetPlaceholderPKM()

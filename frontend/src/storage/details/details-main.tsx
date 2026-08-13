@@ -10,6 +10,7 @@ import { UIDetailsMain } from '../../ui/storage/storage-details/ui-details-main'
 import { BallImg } from '../../img/ball-img';
 import { ItemImg } from '../../img/item-img';
 import { SpeciesImg } from '../../img/species-img';
+import { FusionSprite } from '../../img/fusion-sprite';
 import { TypeItem } from './type-item/type-item';
 import { useCurrentStorage } from '../panel/storage-panel-context';
 import { DetailsAttachedButton } from './details-attached-button';
@@ -64,14 +65,16 @@ export const DetailsMain: React.FC = () => {
             : null}
         attachedBtn={<DetailsAttachedButton />}
     >
-        <SpeciesImg
-            species={pkm.species}
-            context={pkm.context}
-            form={pkm.form}
-            isFemale={pkm.gender === Gender.Female}
-            isShiny={pkm.isShiny}
-            isEgg={pkm.isEgg}
-            isShadow={pkm.isShadow}
-        />
+        {pkm.isFusion && pkm.headSpecies && pkm.bodySpecies
+            ? <FusionSprite headSpecies={pkm.headSpecies} bodySpecies={pkm.bodySpecies} isFemale={pkm.gender === Gender.Female} isShiny={pkm.isShiny} isEgg={pkm.isEgg} isShadow={pkm.isShadow} />
+            : <SpeciesImg
+                species={pkm.species}
+                context={pkm.context}
+                form={pkm.form}
+                isFemale={pkm.gender === Gender.Female}
+                isShiny={pkm.isShiny}
+                isEgg={pkm.isEgg}
+                isShadow={pkm.isShadow}
+            />}
     </UIDetailsMain>;
 };

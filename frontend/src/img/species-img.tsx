@@ -25,7 +25,12 @@ export const SpeciesImg: React.FC<SpeciesImgProps> = ({ species, context, form, 
         ? 1
         : species;
 
-    const staticForms = staticData.species[ usedSpecies ]?.forms[ context ];
+    // Pokémon Infinite Fusion entities (PKF) carry their own context island (Gen9Fusion) for
+    // conversion isolation, but they inherit the Gen9 (SV) layout and display as their head
+    // species with SV sprites — so resolve forms under Gen9.
+    const displayContext = context === EntityContext.Gen9Fusion ? EntityContext.Gen9 : context;
+
+    const staticForms = staticData.species[ usedSpecies ]?.forms[ displayContext ];
 
     if (!staticForms?.[ form ])
         console.log('UNKNOWN FORM -', species, context, form);

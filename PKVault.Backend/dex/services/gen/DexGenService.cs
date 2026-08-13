@@ -17,6 +17,13 @@ public abstract class DexGenService(SaveFile save) //where Save : SaveFile
                     return;
                 }
 
+                // Fusions are not standard-dex species; skip them so the head's
+                // "caught" count is not inflated (PKF carries the real pair).
+                if (pkm.GetMutablePkm() is PKF { BodySpecies: not 0 })
+                {
+                    return;
+                }
+
                 if (speciesSet != null && !speciesSet.Contains(pkm.Species))
                 {
                     return;

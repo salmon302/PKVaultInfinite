@@ -71,6 +71,13 @@ public class ImmutablePKM(PKM Pkm, PKMLoadError? loadError = null)
     public byte Ball => Pkm.Ball;
     public byte MetLevel => Pkm.MetLevel;
 
+    // Fusion fields (Pokémon Infinite Fusion; PKF entity). Head/Body species are
+    // carried in the PKF's reserved bytes; the fusion name lives on the save's
+    // harvested FusionPair, not on the entity, so it is not surfaced here.
+    public bool IsFusion => Pkm is PKF pkf && pkf.BodySpecies != 0;
+    public ushort HeadSpecies => Pkm is PKF pkf ? pkf.HeadSpecies : Species;
+    public ushort BodySpecies => Pkm is PKF pkf ? pkf.BodySpecies : (ushort)0;
+
     // Aliases of ID32
     public uint TrainerTID7 => Pkm.TrainerTID7;
     public uint TrainerSID7 => Pkm.TrainerSID7;
@@ -482,7 +489,8 @@ public enum PKMLoadError
     NOT_FOUND,
     TOO_SMALL,
     TOO_BIG,
-    UNAUTHORIZED
+    UNAUTHORIZED,
+    QUARANTINE
 }
 
 public enum MarkingColorUniversal : byte

@@ -140,8 +140,8 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
     {
         public byte[] Raw = [];
         public RbHash? Root;
-        public List<PK9> Party = [];
-        public List<List<PK9?>> Boxes = [];
+        public List<PKF> Party = [];
+        public List<List<PKF?>> Boxes = [];
         public string[] BoxNames = [];
         public Dictionary<int, FusionPair> BoxFusions = [];
         public Dictionary<int, FusionPair> PartyFusions = [];
@@ -276,7 +276,7 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
         foreach (var entry in boxes.Items)
         {
             int boxIndex = state.Boxes.Count;
-            var slots = new List<PK9?>();
+            var slots = new List<PKF?>();
             names.Add(ReadBoxName(entry, boxIndex));
 
             foreach (var mon in EnumerateBoxSlots(entry))
@@ -315,20 +315,21 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
     #endregion
 
     #region Pokémon conversion
-    private static PK9 ConvertPokemon(RbObject poke, out FusionPair? fusion)
+    private static PKF ConvertPokemon(RbObject poke, out FusionPair? fusion)
     {
         fusion = null;
-        var pk = new PK9();
+        var pk = new PKF();
         try
         {
             var speciesData = poke["@species_data"] as RbObject;
             bool isFused = speciesData?.ClassName.Name == "GameData::FusedSpecies";
 
             ushort species;
+            ushort head = 0, body = 0;
             if (isFused && speciesData is not null)
             {
-                ushort head = ReadSpecies(speciesData["@head_pokemon"]);
-                ushort body = ReadSpecies(speciesData["@body_pokemon"]);
+                head = ReadSpecies(speciesData["@head_pokemon"]);
+                body = ReadSpecies(speciesData["@body_pokemon"]);
                 string fusionName = speciesData["@real_name"] is RbString real && real.Text.Length != 0
                     ? Truncate(real.Text)
                     : string.Empty;
@@ -344,6 +345,9 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
             pk.Species = species;
             if (species == 0)
                 return pk;
+
+            pk.HeadSpecies = species;
+            pk.BodySpecies = isFused ? body : (ushort)0;
 
             pk.Form = (byte)Math.Clamp(ReadInt(poke["@form"]), 0, byte.MaxValue);
 
@@ -415,7 +419,7 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
         catch (Exception)
         {
             // A single malformed Pokémon must never break the whole save load.
-            return new PK9();
+            return new PKF();
         }
         return pk;
     }
@@ -582,7 +586,7 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
     public override string Extension => ".rxdata";
     public override GameVersion Version { get; set; } = GameVersion.InfiniteFusion;
     public override byte Generation => 9;
-    public override EntityContext Context => EntityContext.Gen9; // entities are emitted as PK9
+    public override EntityContext Context => EntityContext.Gen9; // entities are emitted as PKF
     public override bool ChecksumsValid => true;
     public override string ChecksumInfo => "Ruby Marshal stream (no PKHeX checksum).";
     protected override void SetChecksums() { }
@@ -598,12 +602,12 @@ public sealed class SAV_InfiniteFusion : SaveFile, IBoxDetailName
     public override GameVersion MaxGameID => Legal.MaxGameID_HOME;
     public override ReadOnlySpan<ushort> HeldItems => Legal.HeldItems_SV;
 
-    public override Type PKMType => typeof(PK9);
-    public override PKM BlankPKM => new PK9();
+    public override Type PKMType => typeof(PKF);
+    public override PKM BlankPKM => new PKF();
     public override int SIZE_STORED => PokeCrypto.SIZE_8STORED;
     public override int SIZE_PARTY => PokeCrypto.SIZE_8PARTY;
     public override int MaxEV => EffortValues.Max252;
-    protected override PKM GetPKM(Memory<byte> data) => new PK9(data);
+    protected override PKM GetPKM(Memory<byte> data) => new PKF(data);
     protected override void DecryptPKM(Span<byte> data) => PokeCrypto.DecryptIfEncrypted8(data);
 
     public override int BoxCount => _boxCount;

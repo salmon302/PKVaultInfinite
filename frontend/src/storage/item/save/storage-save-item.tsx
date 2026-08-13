@@ -41,7 +41,7 @@ export const StorageSaveItem: React.FC<StorageSaveItemProps> = withErrorCatcher(
                     'id', 'idBase', 'saveId', 'context', 'species', 'nickname', 'level', 'boxId', 'boxSlot',
                     'dynamicChecksum', 'form', 'gender', 'contextVersion', 'heldItem',
                     'isAlpha', 'isShiny', 'nSparkle', 'isEgg', 'isShadow', 'isStarter', 'isDuplicate', 'party',
-                    'canEvolve',
+                    'canEvolve', 'isFusion', 'headSpecies', 'bodySpecies',
                 ]);
             }, [ pkmId ])
         );
@@ -79,13 +79,16 @@ export const StorageSaveItem: React.FC<StorageSaveItemProps> = withErrorCatcher(
             return null;
         }
 
-        const { id, species, nickname, level, boxSlot, form, gender, contextVersion, isAlpha, isShiny, nSparkle, isEgg, isShadow, canEvolve } = savePkm;
+        const { id, species, nickname, level, boxSlot, form, gender, contextVersion, isAlpha, isShiny, nSparkle, isEgg, isShadow, canEvolve, isFusion, headSpecies, bodySpecies } = savePkm;
 
         return <StorageItem
             id={id}
             nodeId={nodeId}
             selected={selected}
             species={species}
+            isFusion={isFusion}
+            headSpecies={headSpecies}
+            bodySpecies={bodySpecies}
             container={container}
             slot={boxSlot}
             context={savePkm.context}

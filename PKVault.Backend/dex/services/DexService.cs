@@ -29,8 +29,8 @@ public class DexService(
 
         List<SaveWrapper> saves = [.. saveIds.Select(id => id == FakeSaveFile.Default.ID32
             ? new(FakeSaveFile.Default)
-            : savesLoadersService.GetLoaders(id).Save
-        )];
+            : savesLoadersService.GetLoaders(id)?.Save
+        ).Where(s => s != null).Select(s => s!)];
 
         var staticSpecies = await staticDataService.GetStaticSpecies();
 
@@ -72,8 +72,8 @@ public class DexService(
 
         List<SaveWrapper> saves = [.. saveIds.Select(id => id == FakeSaveFile.Default.ID32
             ? new(FakeSaveFile.Default)
-            : savesLoadersService.GetLoaders(id).Save
-        )];
+            : savesLoadersService.GetLoaders(id)?.Save
+        ).Where(s => s != null).Select(s => s!)];
 
         Dictionary<uint, List<FusionDexItemDTO>> dex = [];
 

@@ -29,6 +29,11 @@ public abstract record PkmBaseDTO(
     public ushort Species => Pkm.Species;
     public byte Form => Pkm.Form;
     public bool IsEgg => Pkm.IsEgg;
+
+    // Pokémon Infinite Fusion (PKF entity): head/body species of a realized fusion.
+    public bool IsFusion => Pkm.IsFusion;
+    public ushort HeadSpecies => Pkm.HeadSpecies;
+    public ushort BodySpecies => Pkm.BodySpecies;
     public bool IsShiny => Pkm.IsShiny;
     public bool IsAlpha => Pkm.IsAlpha;
     public bool IsNoble => Pkm.IsNoble;

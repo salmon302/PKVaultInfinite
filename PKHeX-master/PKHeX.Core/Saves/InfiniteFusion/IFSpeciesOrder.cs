@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace PKHeX.Core;
 
 /// <summary>
-/// Canonical Infinite Fusion (Pokémon Essentials) species order, keyed by IF's internal dex number
+/// Canonical Infinite Fusion (Pok├⌐mon Essentials) species order, keyed by IF's internal dex number
 /// (<c>GameData::Species.@id_number</c>, 1..577). Maps a dex index to an Essentials symbol, which
 /// <see cref="IFNameLookup.GetSpecies"/> then resolves to a PKHeX species id.
 /// </summary>

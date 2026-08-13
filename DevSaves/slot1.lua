@@ -1,0 +1,170 @@
+return {
+  bagOrder = {
+    [1] = "POKE_BALL",
+    [2] = "ANTIDOTE",
+    [3] = "PARLYZ_HEAL",
+    [4] = "BURN_HEAL",
+  },
+  box = {},
+  defeatedTrainers = {},
+  flags = {
+    EVENT_1ST_ROUTE22_RIVAL_BATTLE = true,
+    EVENT_BATTLED_RIVAL_IN_OAKS_LAB = true,
+    EVENT_CHOSE_PIKACHU = true,
+    EVENT_COMPLETED_CATCH_TRAINING = true,
+    EVENT_FOLLOWED_OAK_INTO_LAB = true,
+    EVENT_FOLLOWED_OAK_INTO_LAB_2 = true,
+    EVENT_GOT_OAKS_PARCEL = true,
+    EVENT_GOT_POKEDEX = true,
+    EVENT_GOT_STARTER = true,
+    EVENT_OAK_ASKED_TO_CHOOSE_MON = true,
+    EVENT_OAK_GOT_PARCEL = true,
+    EVENT_ROUTE22_RIVAL_WANTS_BATTLE = true,
+  },
+  inventory = {
+    ANTIDOTE = 2,
+    BURN_HEAL = 1,
+    PARLYZ_HEAL = 2,
+    POKE_BALL = 11,
+  },
+  lastHeal = {
+    map = "VIRIDIAN_POKECENTER",
+    outdoor = {
+      id = "VIRIDIAN_CITY",
+      x = 23,
+      y = 25,
+    },
+    x = 3,
+    y = 3,
+  },
+  lastOutdoor = {
+    id = "VIRIDIAN_CITY",
+    x = 29,
+    y = 19,
+  },
+  meta = {
+    engine = "0.1.79",
+    format = 4,
+    mods = {
+      [1] = {
+        api = 2,
+        id = "BATTLE_ART_VOXEL_FORK",
+        version = "1.8.5",
+      },
+    },
+    savedAt = 1786579892,
+  },
+  modData = {
+    BATTLE_ART_VOXEL_FORK = {
+      clock = 300,
+    },
+  },
+  money = 125,
+  objectToggles = {
+    OAKS_LAB = {
+      OAKSLAB_EEVEE_POKE_BALL = false,
+      OAKSLAB_OAK1 = true,
+      OAKSLAB_OAK2 = false,
+      OAKSLAB_POKEDEX1 = false,
+      OAKSLAB_POKEDEX2 = false,
+      OAKSLAB_RIVAL = false,
+    },
+    PALLET_TOWN = {
+      PALLETTOWN_OAK = false,
+    },
+    ROUTE_22 = {
+      ROUTE22_RIVAL1 = true,
+    },
+    VIRIDIAN_CITY = {
+      VIRIDIANCITY_OLD_MAN = false,
+      VIRIDIANCITY_OLD_MAN2 = true,
+      VIRIDIANCITY_OLD_MAN_SLEEPY = false,
+    },
+  },
+  party = {
+    [1] = {
+      catchRate = 190,
+      dvs = {
+        attack = 10,
+        defense = 11,
+        hp = 5,
+        special = 13,
+        speed = 8,
+      },
+      exp = 276,
+      hp = 20,
+      level = 6,
+      moves = {
+        [1] = {
+          id = "THUNDERSHOCK",
+          pp = 29,
+        },
+        [2] = {
+          id = "GROWL",
+          pp = 40,
+        },
+        [3] = {
+          id = "TAIL_WHIP",
+          pp = 30,
+        },
+      },
+      nickname = "PEEPER",
+      ot = "YELLOW",
+      otId = 63884,
+      species = "PIKACHU",
+      statExp = {
+        attack = 145,
+        defense = 130,
+        hp = 135,
+        special = 135,
+        speed = 167,
+      },
+      stats = {
+        attack = 12,
+        defense = 10,
+        hp = 20,
+        special = 12,
+        speed = 16,
+      },
+    },
+  },
+  pcItems = {
+    POTION = 1,
+  },
+  pikachuHappiness = 97,
+  pikachuInBall = false,
+  pikachuMood = 128,
+  pikachuWalkSteps = 101,
+  playTime = 720.71666666634,
+  player = {
+    facing = "up",
+    id = 63884,
+    map = "VIRIDIAN_CITY",
+    name = "YELLOW",
+    rival = "GARY",
+    surfing = false,
+    x = 19,
+    y = 7,
+  },
+  poisonSteps = 2,
+  pokedex = {
+    owned = {
+      PIKACHU = true,
+    },
+    seen = {
+      EEVEE = true,
+      PIDGEY = true,
+      PIKACHU = true,
+      RATTATA = true,
+    },
+  },
+  repelSteps = 0,
+  rivalStarter = 2,
+  startMenuIndex = 6,
+  usedPokecenter = true,
+  version = "yellow",
+  visited = {
+    PALLET_TOWN = true,
+    VIRIDIAN_CITY = true,
+  },
+}

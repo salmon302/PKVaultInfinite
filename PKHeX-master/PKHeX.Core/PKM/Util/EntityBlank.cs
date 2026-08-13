@@ -35,6 +35,7 @@ public static class EntityBlank
         nameof(PB8) => new PB8(),
         nameof(PK9) => new PK9(),
         nameof(PA9) => new PA9(),
+        nameof(PKF) => new PKF(),
         nameof(PKH) => new PKH(),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type.ToString(), null),
     };
@@ -52,6 +53,7 @@ public static class EntityBlank
         EntityContext.Gen8b => new PB8(),
         EntityContext.Gen8a => new PA8(),
         EntityContext.Gen9a => new PA9(),
+        EntityContext.Gen9Fusion => new PKF(),
         _ => GetBlank(context.Generation),
     };
 

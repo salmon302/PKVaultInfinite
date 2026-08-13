@@ -626,4 +626,39 @@ public class PkmConvertServiceTests
             }
         }
     }
+
+    [Fact]
+    public void GetPKMTypeWeight_KnownType_ReturnsPinnedWeight()
+    {
+        var method = typeof(PkmConvertService).GetMethod("GetPKMTypeWeight", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        var weight = (int)method.Invoke(null, [typeof(PK9)])!;
+
+        Assert.Equal(16, weight);
+    }
+
+    [Fact]
+    public void GetPKMTypeWeight_UnknownFutureType_DoesNotThrowAndDerivesStableWeight()
+    {
+        var method = typeof(PkmConvertService).GetMethod("GetPKMTypeWeight", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        // An unknown type (e.g. a future generation not yet wired into the converter) must
+        // not throw; it yields a stable weight ordered after all currently known types.
+        var weight = (int)method.Invoke(null, [typeof(FuturePkmType)])!;
+
+        Assert.Equal(9900, weight);
+        Assert.True(weight > 18, "future generation weight must order after known types");
+
+        // Unknown type with an embedded generation digit still must not throw.
+        var withDigit = (int)method.Invoke(null, [typeof(PK10Probe)])!;
+        Assert.Equal(1000, withDigit);
+    }
+
+    private class FuturePkmType
+    {
+    }
+
+    private class PK10Probe
+    {
+    }
 }

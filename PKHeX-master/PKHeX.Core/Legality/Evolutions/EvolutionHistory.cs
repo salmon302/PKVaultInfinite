@@ -50,6 +50,7 @@ public sealed class EvolutionHistory
         EntityContext.Gen7 => Gen7,
         EntityContext.Gen8 => Gen8,
         EntityContext.Gen9 => Gen9,
+        EntityContext.Gen9Fusion => Gen9,
 
         EntityContext.Gen7b => Gen7b,
         EntityContext.Gen8a => Gen8a,
@@ -79,6 +80,7 @@ public sealed class EvolutionHistory
         else if (context == EntityContext.Gen8a) arr = ref Gen8a;
         else if (context == EntityContext.Gen8b) arr = ref Gen8b;
         else if (context == EntityContext.Gen9a) arr = ref Gen9a;
+        else if (context == EntityContext.Gen9Fusion) arr = ref Gen9;
         else throw new ArgumentOutOfRangeException(nameof(context), context, null);
         return ref arr;
     }

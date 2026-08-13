@@ -141,8 +141,9 @@ How it satisfies the `SaveFile` contract PKVault relies on via `SaveWrapper`
 **Bump deliverable:** update `PKVault.Backend/PKHeX.version` to the new fork build and
 replace `PKHeX.Core.dll`.
 
-### 4.2 PKHeX fork — `PKF : PKM`  *(deferred)*
-Originally specced as mandatory. It is **not** needed for the current milestone: non-fused
+### 4.2 PKHeX fork — `PKF : PKM`  *(in planning — see §12)*
+Originally specced as mandatory and deferred. **Reconsidered 2026-08-12:** approved as `PKF : PK9` with its
+own `EntityContext.Gen9Fusion` (save stays `Gen9`), storage-first scope. Non-fused
 Pokémon are official species and ship as `PK9`, and fused Pokémon are surfaced as their head
 species with IF's generated fusion name (`GameData::FusedSpecies.@real_name`, e.g. `Scrafsharp`)
 as the nickname, while `SAV_InfiniteFusion.Fusions` / `.PartyFusions` retain the true
@@ -564,6 +565,20 @@ save and **not** from pokeapi:
 > the per-save harvest) and index the `@seen_standard`/`@owned_standard` arrays. Setting `MaxSpeciesID=577`
 > would wrongly skip IF species whose PKHeX id is > 577.
 
+> **Correction (2026-08-12) — `IFSpeciesOrder` was realigned to the canonical IF national dex.** The
+> previously-committed table had been generated from a *stale* `IFPokedex.txt` (one with ~17 extra species
+> before Regigigas), so every higher index was shifted: e.g. it carried `Regigigas` at IF index **363** and
+> `Dusknoir` at **330**, while the canonical dex (the current `IFPokedex.txt`, confirmed by the user) places
+> `Regigigas` at IF index **346** and `Dusknoir` at **313**. The standard Pokédex still *appeared* correct
+> because `GetSeen`/`GetCaught`/`GetIfIndex` fall back to the per-save `@id_number` harvest, but the
+> **fusion-matrix** dex (`GetFusionDex` → `IFSpeciesOrder.GetSpecies(head)`) and any `EnableFusion`
+> write-back used the misaligned static table and resolved the wrong head/body species. The table has been
+> regenerated from the current `IFPokedex.txt` by **sequential position** (the Nth `#N`/name pair = IF
+> `@id_number` N), so `IFSpeciesOrder[346] == "REGIGIGAS"` and `[313] == "DUSKNOIR"`. All 576 symbols were
+> validated against the prior table's symbol set, so PKHeX-id resolution is unchanged. **If a fusion is ever
+> "recognized" as the wrong head/body, regenerate `IFSpeciesOrder` from `IFPokedex.txt` and rebuild
+> `PKHeX.Core.dll` — do not hand-edit indices.**
+
 ---
 
 ## 10. Minimum deliverables checklist (hand to fork/IF-side implementers)
@@ -571,8 +586,8 @@ save and **not** from pokeapi:
       party/boxes/dex. *(§9)*
 - [x] `SAV_InfiniteFusion` `SaveFile` detectable by `SaveUtil.TryGetSaveFile`.
 - [ ] `PKF` `PKM` carrying head+body + mapped `ushort` species.
-      *(deferred — non-fused mons ship as `PK9`; fusions borrow the head species and record the
-      pair in `SAV_InfiniteFusion.Fusions`)*
+      *(In planning — `PKF : PK9` with `EntityContext.Gen9Fusion`, storage-first scope; see §12. Non-fused
+       mons ship as `PK9`; fusions borrow the head species and record the pair in `SAV_InfiniteFusion.Fusions`)*
 - [x] `EntityContext` decision — **reuse `EntityContext.Gen9`** (`PK9`). No new context, no
       `LAST_ENTITY_CONTEXT` change. (`Gen9a` was rejected: that context belongs to `PA9`/ZA.)
 - [x] Fusion → `ushort` species-id mapping ruled against IF's real id range. *(§9.6 — IF's native
@@ -587,15 +602,19 @@ save and **not** from pokeapi:
        wired in `DexService.GetDexService`. Read works for all 576 species (SeenCount 328→418, CaughtCount 328→405
        on the sample save once the full table landed); `SetSeen`/`SetCaught` persist via write-back. *(§4.4, §4.5(a))*
        *(Standard-dex only — the fusion-matrix tab is now surfaced read-only, §9.5.)*
-- [ ] Fusion **display** (name/sprites/types of realized fusions in storage) — per-save runtime derivation from
-       `GameData::FusedSpecies` in the save, bounded to realized fusions (NOT a build-time
-       `GenStaticFusions`; the full 333k space overflows `ushort`, §5). *(§4.5(b))*
+- [x] Fusion **display** (sprites of realized fusions in storage/details) — `PKF.IsFusion`/`HeadSpecies`/`BodySpecies`
+       surface on `PkmBaseDTO`; `frontend/src/img/fusion-sprite.tsx` renders a horizontal head/body split (head left,
+       body right, overlapping) in the storage grid (`StorageItem`) and details panel (`DetailsMain`), and banks
+       (`StorageMainItem`). Fusion name shows via the `nickname` (IF portmanteau). Per-save `GameData::FusedSpecies`
+       derivation for **types** in storage is still deferred (§4.5(b)); the Fusions dex tab already shows merged types.
+       *(2026-08-12)*
 - [x] **Fusion-matrix dex tab (read + write-back)** — `SAV_InfiniteFusion` parses `@seen_fusion`/`@owned_fusion`;
        `DexIFService.GetFusionDex` emits `FusionDexItemDTO` entries (head/body PKHeX species, portmanteau
        name, merged types, seen/caught); surfaced via `DexService.GetFusionDex` → `DataDTO.FusionDex` /
        `api/dex/fusions` and the frontend **Fusions** tab. Write-back via `FusionDexSyncAction`
        (`PUT api/storage/dex/fusions/sync`) merging seen/caught across selected saves. *(§9.5)*
-- [ ] `PKF` conversion rule (intra-context only).
+- [ ] `PKF` conversion rule (intra-context only). *(In planning — see §12.3; cross-context block falls
+       out of the existing conversion switches having no `PKF` case.)*
 - [x] `SAVE_VERSION_OVERRIDES` entry + friendly `GameVersion`. *Implemented via `GameVersion.InfiniteFusion`
        added to the fork enum and `SAV_InfiniteFusion.Version = GameVersion.InfiniteFusion` (native friendly
        label; `SAVE_VERSION_OVERRIDES` still usable for per-install overrides). `GetVersionName` falls back to
@@ -625,6 +644,150 @@ save and **not** from pokeapi:
     live. **Fusion-matrix dex tab is now surfaced (read + write-back)** (§9.5). **`SAVE_VERSION_OVERRIDES`/friendly
     version is done** (§4.6: `GameVersion.InfiniteFusion` + `SAV_InfiniteFusion.Version`). Remaining:
     fusion **display** via per-save `GameData::FusedSpecies` derivation (§4.5(b)).
-4. **Fusion entities.** Decide whether to promote fusions from "head species + nickname" to a real
-   `PKF`; this is what forces the §5 `ushort` mapping.
+ 4. **Fusion entities.** Decide whether to promote fusions from "head species + nickname" to a real
+    `PKF`; this is what forces the §5 `ushort` mapping.
+
+---
+
+## 12. PKF design plan — true fusion-first-class support (storage-first)
+
+> **Status:** Planning. Decided 2026-08-12. **Entity model:** `PKF : PK9` carrying `HeadSpecies`/`BodySpecies`
+> overlaid in reserved `PK9` bytes, with its **own** `EntityContext.Gen9Fusion` (the save itself stays
+> `Gen9`, per §4.3). **Scope:** storage-first — fusions become first-class in storage/banks and the
+> Fusions tab, and stop polluting the standard Pokédex; surfacing fusions as derived standard-dex
+> entries (the §5 `ushort` mapping + per-save `StaticSpecies`) is **explicitly deferred**.
+
+### 12.1 Why a new `EntityContext` (and not just reusing `Gen9`)
+
+The approved model gives the fusion entity its own context island (`Gen9Fusion`) while the *save* keeps
+`Context => Gen9`. This isolates conversions and display branching on the **entity** (`PKF.Context`) without
+disturbing the save-level machinery that the standard dex and `PersonalTable.SV` rely on:
+
+- `DexGenService.UpdateDexWithSave` keys forms by `save.Context` (`DexGenService.cs:73`). If the *save*
+  were `Gen9Fusion`, `staticSpecies[head].Forms[(byte)Gen9Fusion]` would be empty and the standard dex
+  would break. Keeping the save `Gen9` preserves the existing dex.
+- `PKF.Context => Gen9Fusion` is what lets `PkmConvertService` treat a fusion as a distinct island and
+  block cross-context moves (§12.5).
+
+`PKF` **inherits `PK9`**, so `PersonalInfo => PersonalTable.SV` (hardcoded in `PK9`) is reused for free —
+storage-first displays the fusion via its **head** species' SV personal data, with merged types overlaid
+from the harvested `FusionPair` (§12.6). No new `PersonalTable` is required for this milestone.
+
+### 12.2 Fork touch points
+
+1. **`PKHeX.Core/PKM/Util/EntityContext.cs`**
+   - Add `Gen9Fusion` member immediately before `MaxInvalid` (numeric value between `Gen9a` and `MaxInvalid`).
+   - `extension(EntityContext value).Generation`: add `Gen9Fusion => (byte)9` to the post-`SplitInvalid` switch.
+   - `IsValid` already accepts any `value < MaxInvalid` that is not `0`/`SplitInvalid` — no change.
+   - `GetSingleGameVersion`: add `Gen9Fusion => GameVersion.InfiniteFusion`.
+   - `Console`: extend the `Gen7b or Gen8 or Gen8a or Gen8b or Gen9 or Gen9a` arm to include `Gen9Fusion`
+     (fan game → treat as Switch-era for console grouping).
+   - `extension(GameVersion version).Context`: add `GameVersion.InfiniteFusion => Gen9Fusion` (currently it
+     falls through to `(EntityContext)version.Generation` and resolves to `Gen9`).
+   - `IsMegaContext`/era flags: gen-9 defaults already correct (`IsEraHOME` ⇒ true).
+
+2. **New `PKHeX.Core/PKM/PKF.cs` — `public sealed class PKF : PK9`**
+   - `public override EntityContext Context => EntityContext.Gen9Fusion;`
+   - `public ushort HeadSpecies { get; set; }` and `public ushort BodySpecies { get; set; }` — overlaid into
+     PK9 `ExtraBytes` so they survive `WriteEncryptedDataStored`/party **and** PKVault's bank byte storage:
+     - Use the reserved `0x96–0x99` block (already in `PK9.ExtraBytes`, hence excluded from the sanity
+       checksum). `0x96–0x97` = `HeadSpecies`, `0x98–0x99` = `BodySpecies`. Optional `0x9A` = fusion flag
+       byte (e.g. body-shiny) if needed later.
+   - `Species` stays = **head** (inherited); a fusion is "present" iff `BodySpecies != 0`.
+   - Constructors: `PKF()`, `PKF(Memory<byte> data)`, `PKF(PK9 src)` (copy + read head/body from reserved bytes).
+   - `BlankPKM`-compatible; reuse PK9 encryption/party logic unchanged.
+
+3. **`PKHeX.Core/Saves/Util/BlankSaveFile.cs`**
+   - Ensure `Get(EntityContext)` (or the `BlankPKM`-type mapping it uses) returns `new PKF()` for `Gen9Fusion`,
+     so `ConvertTo(pkm, EntityContext.Gen9Fusion)` yields a `PKF` target. *(Verify the exact branch — the
+     context→blank-PKM mapping may currently flow through `SaveFileType`; a `Gen9Fusion` case must be added.)*
+
+4. **`SAV_InfiniteFusion.cs`**
+   - `public override Type PKMType => typeof(PKF);` (was `PK9`).
+   - `Context` **unchanged** (`Gen9`) — see §12.1.
+   - `ConvertPokemon` (SAV_InfiniteFusion.cs:318): build a `PKF` for both branches —
+     fused ⇒ `HeadSpecies`/`BodySpecies` set, `Species = head`; non-fused ⇒ `BodySpecies = 0`.
+   - Keep `Fusions`/`PartyFusions` populated (diagnostics + backward-compat with the existing Fusions tab).
+   - Write-back is **unaffected**: `GetFinalData()` re-marshals the RGSS graph, so head/body remain
+     authoritative from `GameData::FusedSpecies`; the packed bytes are only for PKVault-side byte storage.
+
+### 12.3 `PkmConvertService` guards (PKVault.Backend)
+
+- `GetPKMTypeWeight` (PkmConvertService.cs:216): add `"PKF" => 18` so the recursive converter terminates
+  instead of throwing "PKM type not handled".
+- **Intra-context-only rule (free):** `TryPKToVariant`/`TryForwardConversion`/`TryBackwardConversion` switch
+  on `source.GetType().Name` and have **no** `"PKF"` case. Therefore any conversion whose source is `PKF`
+  and whose target is *not* `PKF` returns `null` → `ConvertRecursive` throws "No conversion path" — exactly
+  the desired block against silent body loss. Verify the UI surfaces this as "move not allowed".
+- Intra-context moves (PKF → PKF) already short-circuit in `ConvertRecursive` (`current.GetType() ==
+  targetType` ⇒ clone). Confirm `ConvertTo(PKF, EntityContext.Gen9Fusion)` and `ConvertTo(PKF, targetSave:
+  SAV_InfiniteFusion)` both resolve target `PKFType == PKF` and succeed.
+- Watch the SV legality path: PKF belongs to an `SAV_InfiniteFusion`, which already short-circuits
+  legality (§10). Moving a PKF into a non-IF bank must remain covered by that short-circuit or be blocked.
+
+### 12.4 Dex de-pollution (PKVault.Backend)
+
+`DexGenService.UpdateDexWithSave` (DexGenService.cs:11-32) aggregates by `pkm.Species`. A `PKF.Species =
+head` would inflate the head's "caught" count — the §4.2 trap. Fix: skip fusions in the aggregation:
+
+```csharp
+.ForEach(pkm =>
+{
+    if (pkm.IsEgg) return;
+    if (pkm.GetMutablePkm() is PKF pkf && pkf.BodySpecies != 0) return; // fusion: not a standard-dex species
+    ...
+});
+```
+
+The fusion-matrix dex (§9.5) remains the fusion's canonical home. Standard-dex fusion *entries* (§5 `ushort`
+mapping) stay **deferred**.
+
+### 12.5 PKVault display / storage
+
+- **`ImmutablePKM`** (ImmutablePKM.cs): expose `HeadSpecies`/`BodySpecies`/`IsFusion`/`FusionName` when
+  `Pkm is PKF`. Used by both display and the dex exclusion above.
+- **Banks:** verify a `PKF` written to a non-IF bank round-trips. PKVault stores PKM bytes generically and
+  re-wraps via the target save's `PKMType`; since banks may not carry an IF context, confirm the backend
+  preserves the `PKF` type (or persists head/body in a side channel) rather than re-deriving a plain `PK9`.
+  *(Open verification item.)*
+- **Frontend:** the Fusions tab (§9.5) already exists. Storage slots need a head+body sprite overlay and
+  the fusion name. Extend the PKM DTO with `headSpecies`/`bodySpecies`/`isFusion` and regenerate the SDK
+  (`generate-sdk.ts`). This is a **schema change** — run the SDK regen and check no breaking consumer.
+
+### 12.6 Open design decisions (resolve during implementation)
+
+- **Merged display types/stats.** Storage-first shows the head's SV `PersonalInfo`; the fused **types**
+  should be overlaid from `FusionPair.Types` (harvested from `GameData::FusedSpecies`). Confirm
+  `ImmutablePKM.Types` (ImmutablePKM.cs:212) branches on `IsFusion` to use the harvested types rather than
+  `PersonalInfo`. Base stats for a fusion (IF's `@base_stats`) are *not* the head's SV stats — decide
+  whether storage-first shows head stats or harvested fusion stats; the latter needs the fusion data
+  carried beyond head/body (consider packing base stats, or re-deriving from the save graph only).
+- **Bank persistence of fusion data.** If banks must show correct fusion types/stats without the source
+  save, the harvested `FusionPair` payload must travel with the `PKF` bytes (pack more than head/body), or
+  PKVault must store a `FusionPair` side-channel keyed by the entity. Scope this only if banks are required
+  to render fusions standalone.
+
+### 12.7 Sequencing
+
+1. Fork: add `EntityContext.Gen9Fusion` + `GameVersion.InfiniteFusion` mapping (§12.2.1).
+2. Fork: implement `PKF : PK9` with reserved-byte head/body + `BlankSaveFile` branch (§12.2.2-3).
+3. Fork: `SAV_InfiniteFusion` emits `PKF`, `ConvertPokemon` populates head/body (§12.2.4).
+4. Rebuild/replace `PKHeX.Core.dll`; bump `PKVault.Backend/PKHeX.version`.
+5. PKVault: `PkmConvertService` weight + confirm cross-context block (§12.3).
+6. PKVault: `DexGenService` fusion skip (§12.4).
+7. PKVault: `ImmutablePKM` fusion fields (§12.5).
+8. Frontend: head+body overlay + DTO schema regen (§12.5).
+9. Tests: extend `IFTool` round-trip (verify `PKF` bytes survive `Save(Load(x))`); add
+   `PKVault.Backend.Tests` for `PKF` build/serialize/convert; regenerate SDK; verify no breaking schema.
+
+### 12.8 Checklist update
+
+- [x] `EntityContext.Gen9Fusion` + `GameVersion.InfiniteFusion ⇒ Gen9Fusion` mapping.
+- [x] `PKF : PK9` with reserved-byte `HeadSpecies`/`BodySpecies`; `EntityBlank` returns `PKF` for `Gen9Fusion` (`BlankSaveFile` branches on `SaveFileType`, so the context→blank-PKM mapping lives in `EntityBlank`; `PK9` unsealed to allow inheritance).
+- [x] `SAV_InfiniteFusion.PKMType => typeof(PKF)`; `ConvertPokemon` populates head/body (`HeadSpecies`/`BodySpecies` in reserved 0x96–0x99; `PK9` unsealed).
+- [x] `PkmConvertService` `PKF` weight (`"PKF" => 18`); cross-context conversion blocked (intra-context clone allowed — `ConvertRecursive` returns clean "No conversion path" for cross-context PKF).
+- [x] `DexGenService` excludes fusions from standard-dex aggregation (`pkm.GetMutablePkm() is PKF { BodySpecies: not 0 }` skip).
+- [x] `ImmutablePKM` exposes `IsFusion`/`HeadSpecies`/`BodySpecies`; `PkmBaseDTO` carries `isFusion`/`headSpecies`/`bodySpecies` (frontend SDK `pkmBaseDTO.gen.ts` manually synced). Frontend storage sprite overlay is a larger UI feature (deferred — §12.6 open decisions).
+- [x] Tests: `IFTool` round-trip idempotent with `PKF` emit; `PKVault.Backend.Tests/PKFTests.cs` (4 tests: byte round-trip, non-fusion body=0, intra-context convert, cross-context block) — all pass. SDK regen performed manually (additive DTO fields); full `orval` regen against a running backend remains the documented step.
+- [ ] *(Deferred)* Standard-dex fusion entries via §5 `ushort` mapping + per-save `StaticSpecies`.
 

@@ -438,7 +438,7 @@ Slugma
 Magcargo
 #220
 Swinub
-#221a
+#221
 Piloswine
 #222
 Corsola

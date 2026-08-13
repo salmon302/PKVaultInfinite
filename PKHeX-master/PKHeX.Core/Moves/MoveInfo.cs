@@ -42,6 +42,7 @@ public static class MoveInfo
         Gen8a => MoveInfo8a.PP,
         Gen8b => MoveInfo8.PP,
         Gen9a => MoveInfo9a.PP,
+        Gen9Fusion => MoveInfo9.PP,
         _ => throw new ArgumentOutOfRangeException(nameof(context)),
     };
 
@@ -55,6 +56,7 @@ public static class MoveInfo
         Gen8b => MoveInfo8b.DummiedMoves,
         Gen9 => MoveInfo9.DummiedMoves,
         Gen9a => MoveInfo9a.DummiedMoves,
+        Gen9Fusion => MoveInfo9.DummiedMoves,
         _ => [],
     };
 

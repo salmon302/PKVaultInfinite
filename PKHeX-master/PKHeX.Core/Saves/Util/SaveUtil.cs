@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Threading;
+using PKHeX.Core.Saves.Gen1.Lua;
 using static PKHeX.Core.MessageStrings;
 using static PKHeX.Core.SaveFileType;
 using static System.Buffers.Binary.BinaryPrimitives;
@@ -107,6 +108,7 @@ public static class SaveUtil
     // ReSharper disable once CollectionNeverUpdated.Global
     public static readonly List<ISaveReader> CustomSaveReaders =
     [
+        new LuaSaveReader(),
         new ZipReader(),
     ];
 

@@ -217,7 +217,9 @@ public class SavesLoadersService(
             if (saveRaw.Generation <= 3)
                 SaveLanguage.TryRevise(saveRaw);
 
-            SaveWrapper save = new(saveRaw);
+            SaveWrapper save = Path.GetExtension(path)?.Equals(".lua", StringComparison.OrdinalIgnoreCase) is true && saveRaw is SAV1
+                ? new LuaSaveWrapper((SAV1)saveRaw)
+                : new SaveWrapper(saveRaw);
             ArgumentException.ThrowIfNullOrWhiteSpace(save.Metadata.FilePath);
 
             UpdateGlobalsWithSave(loaders, savePaths, save, path, evolves);
